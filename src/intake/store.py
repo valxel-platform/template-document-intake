@@ -178,10 +178,48 @@ COLUMNS = (
     "reviewed_by",
     "attempts",
 )
+# Every statement is a literal: nothing is ever formatted into SQL.
+SELECT = (
+    "select id, tenant, type, status, uploaded_by, filename, declared_format, size, created_at, sha256,"
+    " format, problem, fields, reviewed_by, attempts from intake_documents"
+)
+INSERT = (
+    "insert into intake_documents (id, tenant, type, status, uploaded_by, filename, declared_format, size,"
+    " created_at, sha256, format, problem, fields, reviewed_by, attempts)"
+    " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+)
+UPDATE = (
+    "update intake_documents set type = %s, status = %s, uploaded_by = %s, filename = %s,"
+    " declared_format = %s, size = %s, sha256 = %s, format = %s, problem = %s, fields = %s, reviewed_by = %s, attempts = %s"
+    " where id = %s and (%s = '' or status = %s)"
+)
+UPDATED = (
+    "type",
+    "status",
+    "uploaded_by",
+    "filename",
+    "declared_format",
+    "size",
+    "sha256",
+    "format",
+    "problem",
+    "fields",
+    "reviewed_by",
+    "attempts",
+)
+BY_ID = SELECT + " where id = %s"
+BY_ID_IN = SELECT + " where id = %s and tenant = any(%s)"
+DUE = SELECT + " where status = 'uploaded' order by created_at limit %s"
+QUEUE = SELECT + " where status = 'needs_review' and tenant = any(%s) order by created_at limit %s"
+EXPIRED = SELECT + " where type = %s and created_at < now() - make_interval(days => %s) limit %s"
 
 
 def _row(r: Any) -> Document:
     return Document(**dict(zip(COLUMNS, r, strict=True)))
+
+
+def _values(doc: Document, columns: tuple[str, ...]) -> list[Any]:
+    return [json.dumps(doc.fields) if c == "fields" else getattr(doc, c) for c in columns]
 
 
 class PostgresStore:
@@ -191,35 +229,23 @@ class PostgresStore:
         self.pool = ConnectionPool(dsn, min_size=1, max_size=5, open=True, kwargs={"autocommit": True})
         with self.pool.connection() as conn:
             conn.execute(SCHEMA)
-        self.cols = ", ".join(COLUMNS)
 
     def create(self, doc: Document) -> None:
-        values = [getattr(doc, c) for c in COLUMNS]
-        values[COLUMNS.index("fields")] = json.dumps(doc.fields)
         with self.pool.connection() as conn:
-            conn.execute(
-                f"insert into intake_documents ({self.cols}) values ({', '.join(['%s'] * len(COLUMNS))})",  # noqa: S608 - fixed columns
-                values,
-            )
+            conn.execute(INSERT, _values(doc, COLUMNS))
 
     def get(self, doc_id: str, tenants: frozenset[str] | None) -> Document | None:
         with self.pool.connection() as conn:
-            r = conn.execute(
-                f"select {self.cols} from intake_documents where id = %s"  # noqa: S608
-                + (" and tenant = any(%s)" if tenants is not None else ""),
-                (doc_id, sorted(tenants)) if tenants is not None else (doc_id,),
+            r = (
+                conn.execute(BY_ID, (doc_id,))
+                if tenants is None
+                else conn.execute(BY_ID_IN, (doc_id, sorted(tenants)))
             ).fetchone()
         return _row(r) if r else None
 
     def update(self, doc: Document, events: list[Outgoing] | None = None, *, expect: str = "") -> bool:
-        sets = [c for c in COLUMNS if c not in ("id", "tenant", "created_at")]
-        values = [json.dumps(doc.fields) if c == "fields" else getattr(doc, c) for c in sets]
         with self.pool.connection() as conn, conn.transaction():
-            sql = (
-                f"update intake_documents set {', '.join(f'{c} = %s' for c in sets)} where id = %s"  # noqa: S608
-                + (" and status = %s" if expect else "")
-            )
-            cur = conn.execute(sql, [*values, doc.id, *([expect] if expect else [])])
+            cur = conn.execute(UPDATE, [*_values(doc, UPDATED), doc.id, expect, expect])
             if not cur.rowcount:
                 return False
             for e in events or []:
@@ -231,32 +257,17 @@ class PostgresStore:
 
     def due(self, limit: int) -> list[Document]:
         with self.pool.connection() as conn:
-            rows = conn.execute(
-                f"select {self.cols} from intake_documents where status = 'uploaded'"  # noqa: S608
-                " order by created_at limit %s",
-                (limit,),
-            ).fetchall()
-        return [_row(r) for r in rows]
+            return [_row(r) for r in conn.execute(DUE, (limit,)).fetchall()]
 
     def queue(self, tenants: frozenset[str], limit: int) -> list[Document]:
         with self.pool.connection() as conn:
-            rows = conn.execute(
-                f"select {self.cols} from intake_documents where status = 'needs_review'"  # noqa: S608
-                " and tenant = any(%s) order by created_at limit %s",
-                (sorted(tenants), limit),
-            ).fetchall()
-        return [_row(r) for r in rows]
+            return [_row(r) for r in conn.execute(QUEUE, (sorted(tenants), limit)).fetchall()]
 
     def expired(self, retention: dict[str, int], limit: int) -> list[Document]:
         out: list[Document] = []
         with self.pool.connection() as conn:
             for t, days in sorted(retention.items()):
-                rows = conn.execute(
-                    f"select {self.cols} from intake_documents where type = %s"  # noqa: S608
-                    " and created_at < now() - make_interval(days => %s) limit %s",
-                    (t, days, limit),
-                ).fetchall()
-                out += [_row(r) for r in rows]
+                out += [_row(r) for r in conn.execute(EXPIRED, (t, days, limit)).fetchall()]
         return out[:limit]
 
     def forget(self, doc: Document) -> None:
