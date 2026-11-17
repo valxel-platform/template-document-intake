@@ -1,0 +1,14 @@
+# What G4 reviews with the design's Documents section: which documents the product takes, what's
+# read from them and how long they're kept. Everything here is synthetic: the coder replaces it.
+name: template-document-intake
+data_class: phi
+documents:
+  - type: lab-report
+    formats: [pdf, png, jpeg]
+    max_mb: 10
+    retention_days: 2555
+    dataset: lab-report-extracted
+    fields:
+      - { name: patient_ref, required: true, min_confidence: 0.9 }
+      - { name: collected_on, required: true, min_confidence: 0.8 }
+      - { name: test_code, min_confidence: 0.8 }
