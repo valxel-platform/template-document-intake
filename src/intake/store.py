@@ -208,11 +208,29 @@ UPDATED = (
     "reviewed_by",
     "attempts",
 )
-BY_ID = SELECT + " where id = %s"
-BY_ID_IN = SELECT + " where id = %s and tenant = any(%s)"
-DUE = SELECT + " where status = 'uploaded' order by created_at limit %s"
-QUEUE = SELECT + " where status = 'needs_review' and tenant = any(%s) order by created_at limit %s"
-EXPIRED = SELECT + " where type = %s and created_at < now() - make_interval(days => %s) limit %s"
+BY_ID = (
+    "select id, tenant, type, status, uploaded_by, filename, declared_format, size, created_at, sha256,"
+    " format, problem, fields, reviewed_by, attempts from intake_documents where id = %s"
+)
+BY_ID_IN = (
+    "select id, tenant, type, status, uploaded_by, filename, declared_format, size, created_at, sha256,"
+    " format, problem, fields, reviewed_by, attempts from intake_documents where id = %s and tenant = any(%s)"
+)
+DUE = (
+    "select id, tenant, type, status, uploaded_by, filename, declared_format, size, created_at, sha256,"
+    " format, problem, fields, reviewed_by, attempts from intake_documents"
+    " where status = 'uploaded' order by created_at limit %s"
+)
+QUEUE = (
+    "select id, tenant, type, status, uploaded_by, filename, declared_format, size, created_at, sha256,"
+    " format, problem, fields, reviewed_by, attempts from intake_documents"
+    " where status = 'needs_review' and tenant = any(%s) order by created_at limit %s"
+)
+EXPIRED = (
+    "select id, tenant, type, status, uploaded_by, filename, declared_format, size, created_at, sha256,"
+    " format, problem, fields, reviewed_by, attempts from intake_documents"
+    " where type = %s and created_at < now() - make_interval(days => %s) limit %s"
+)
 
 
 def _row(r: Any) -> Document:
