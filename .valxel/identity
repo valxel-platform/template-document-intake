@@ -1,0 +1,5 @@
+# Files that carry this template's name. When the SDLC tool creates a repo from the template, it
+# replaces the template's name with the new component's in each: intake.yaml's name, and
+# component.py, which names it in error reports, traces and audit records.
+intake.yaml
+src/intake/component.py

@@ -1,0 +1,3 @@
+# Written by the SDLC tool from the product's dataset catalog: the contracts this component
+# publishes. Don't edit by hand.
+lab-report-extracted: { topic: emr.lab-report-extracted.v1, version: 1.0.0 }
