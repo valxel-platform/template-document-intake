@@ -190,7 +190,8 @@ INSERT = (
 )
 UPDATE = (
     "update intake_documents set type = %s, status = %s, uploaded_by = %s, filename = %s,"
-    " declared_format = %s, size = %s, sha256 = %s, format = %s, problem = %s, fields = %s, reviewed_by = %s, attempts = %s"
+    " declared_format = %s, size = %s, sha256 = %s, format = %s, problem = %s, fields = %s,"
+    " reviewed_by = %s, attempts = %s"
     " where id = %s and (%s = '' or status = %s)"
 )
 UPDATED = (
