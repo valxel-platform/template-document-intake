@@ -1,5 +1,7 @@
 # The template conformance suite (.github/scripts/conformance.py, managed by the platform): the built
 # image does what every document intake repo must. An upload is declared with a token like the BFF's.
+image: "ci"  # the tag CI builds
+command: "uv run document-intake"  # conformance.py local: the app as a process
 port: 8080
 audience: document-intake
 env:
