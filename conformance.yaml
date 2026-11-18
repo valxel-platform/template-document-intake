@@ -1,0 +1,26 @@
+# The template conformance suite (.github/scripts/conformance.py, managed by the platform): the built
+# image does what every document intake repo must. An upload is declared with a token like the BFF's.
+image: "ci"  # the tag CI builds
+command: "uv run document-intake"  # conformance.py local: the app as a process
+port: 8080
+audience: document-intake
+env:
+  INTAKE_OIDC_ISSUER: "{issuer}"
+  INTAKE_OIDC_JWKS_URL: "{jwks}"
+  INTAKE_STORAGE: memory
+  INTAKE_FLAGS_URL: "{ofrep}"
+  INTAKE_PRODUCT: conformance
+  INTAKE_ENVIRONMENT: ci
+  INTAKE_AUDIT_SINK: log
+steps:
+  - method: POST
+    path: /documents
+    token: {scope: "documents:write documents:read", organization: {north-clinic: {}}}
+    json: {type: lab-report, filename: "cbc.pdf", format: pdf, size: 2048}
+    expect: [201]
+    save: {doc: "json:id"}
+  - method: GET
+    path: /documents/{doc}
+    token: {scope: "documents:read", organization: {north-clinic: {}}}
+# No flag yet: the example code evaluates none (a feature adds its own, flags.enabled).
+checks: [audit, tracing, events]
