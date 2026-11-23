@@ -225,3 +225,23 @@ def test_uploaded_twice_is_harmless_and_a_failed_document_shows_why(env):
     d = env.store.docs[doc_id]
     env.store.docs[doc_id] = d.__class__(**{**d.__dict__, "status": "failed", "problem": "scan: down"})
     assert env.client.get(f"/documents/{doc_id}", headers=auth("reader")).json()["problem"] == "scan"
+
+
+def test_the_example_feature_is_behind_its_flag(env):
+    """The pattern every feature follows: its new behaviour reads its flag, and off is today's."""
+    from openfeature.provider.in_memory_provider import InMemoryFlag, InMemoryProvider
+
+    from intake import flags
+    from intake.app import example_flag
+    from intake.settings import Settings
+
+    assert example_flag(Settings(product="emr")) == "emr.example.document-age"
+    doc_id = env.upload()
+    assert "age_seconds" not in env.client.get(f"/documents/{doc_id}", headers=auth("reader")).json()
+    on = InMemoryFlag("on", {"on": True, "off": False})
+    flags.use_provider(InMemoryProvider({"example.example.document-age": on, "emr.example.document-age": on}))
+    try:
+        shown = env.client.get(f"/documents/{doc_id}", headers=auth("reader")).json()
+        assert shown["age_seconds"] >= 0
+    finally:
+        flags.use_provider(InMemoryProvider({}))
