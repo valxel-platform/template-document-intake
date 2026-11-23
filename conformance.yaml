@@ -22,5 +22,5 @@ steps:
   - method: GET
     path: /documents/{doc}
     token: {scope: "documents:read", organization: {north-clinic: {}}}
-# No flag yet: the example code evaluates none (a feature adds its own, flags.enabled).
-checks: [audit, tracing, events]
+# GET /documents/{id} reads the example feature's flag (app.example_flag) through OFREP.
+checks: [audit, tracing, events, flags]

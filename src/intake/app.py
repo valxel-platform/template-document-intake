@@ -172,6 +172,13 @@ def build(
     return Runtime(settings, cfg, store, storage, pipeline, auditor, verifier, [])
 
 
+def example_flag(settings: Settings) -> str:
+    """The example feature's flag. It shows the pattern every feature follows: the tool gives the
+    feature a flag in the product's Flipt (on in dev and staging, off in production until it's
+    released) and the new behaviour reads it. Replace it with your first feature's own."""
+    return f"{settings.product or 'example'}.example.document-age"
+
+
 def create_app(
     settings: Settings | None = None, *, runtime: Runtime | None = None, workers: bool = True
 ) -> Any:
@@ -289,7 +296,11 @@ def create_app(
     def show(doc_id: str, caller: Caller = read) -> dict[str, Any]:
         doc = mine(caller, doc_id)
         audit("document.read", caller, doc)
-        return view(doc)
+        out = view(doc)
+        # The template's example feature, behind its flag: off, the response is today's.
+        if flags.enabled(example_flag(settings), user=caller.subject or caller.client):
+            out["age_seconds"] = int((now() - doc.created_at).total_seconds())
+        return out
 
     @app.get("/documents/{doc_id}/download")
     def download(doc_id: str, caller: Caller = read) -> dict[str, Any]:
