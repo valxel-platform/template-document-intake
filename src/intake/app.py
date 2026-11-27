@@ -11,7 +11,8 @@
   POST /documents/{id}/review     (review scope) confirm or correct the fields; then they're published.
 
 A caller sees only their tenants' documents (another tenant's answers 404). Every read of a document
-or its file, and every review, is audited by id. /healthz, /readyz and /metrics are in-cluster only.
+or its file, and every review, is audited by id. /healthz and /readyz are in-cluster only; /metrics
+is on the management port (management.py).
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from pydantic import BaseModel, Field
 
-from . import cohorts, errors, events, flags, telemetry
+from . import cohorts, errors, events, flags, management, telemetry
 from .audit import Actor, Auditor, AuditUnavailable, make_sink, require_encryption
 from .auth import Caller, JwtVerifier, RateLimiter, Verifier, authenticate
 from .checks import ClamdScanner, NoScanner
@@ -369,10 +370,6 @@ def create_app(
             status_code=503 if dead else 200,
         )
 
-    @app.get("/metrics", include_in_schema=False)
-    def metrics() -> Response:
-        return Response(generate_latest(REGISTRY), media_type=CONTENT_TYPE_LATEST)
-
     app.add_middleware(cohorts.CohortMiddleware)
     app.add_middleware(errors.TraceResponseMiddleware)
     app.state.runtime = rt
@@ -411,9 +408,19 @@ def start_workers(rt: Runtime) -> None:
     events.start_reporting()
 
 
+def metrics_body() -> tuple[bytes, str]:
+    """What the management port serves (management.py): every metric, the product events counter
+    (valxel_events_total) among them."""
+    return generate_latest(REGISTRY), CONTENT_TYPE_LATEST
+
+
 def main() -> None:
     import uvicorn
 
     settings = Settings()
     telemetry.setup_logging(COMPONENT)
-    uvicorn.run(create_app(settings), host="0.0.0.0", port=settings.port, log_config=None)  # noqa: S104
+    app = create_app(settings)
+    # /metrics on the management port (MANAGEMENT_PORT, 8081), apart from the API, as in the Java
+    # templates: the mesh lets the data plane's metrics collector reach that port only.
+    management.serve(metrics_body)
+    uvicorn.run(app, host="0.0.0.0", port=settings.port, log_config=None)  # noqa: S104

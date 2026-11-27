@@ -2,6 +2,8 @@
 # image does what every document intake repo must. An upload is declared with a token like the BFF's.
 image: "ci"  # the tag CI builds
 command: "uv run document-intake"  # conformance.py local: the app as a process
+# /metrics is on the management port (MANAGEMENT_PORT, 8081), apart from the API.
+metrics: http://127.0.0.1:8081/metrics
 port: 8080
 audience: document-intake
 env:
