@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from intake.app import build, clean_name
+from intake.app import build, clean_name, metrics_body
 from intake.extraction import FixedExtractor
 
 from .conftest import GOOD, auth, make_env
@@ -175,7 +175,8 @@ def test_deployed_environments_refuse_development_parts(settings):
 def test_health_and_metrics(env):
     assert env.client.get("/healthz").json() == {"status": "ok"}
     assert env.client.get("/readyz").status_code == 200
-    assert "valxel_events" in env.client.get("/metrics").text
+    assert env.client.get("/metrics").status_code == 404  # on the management port (8081)
+    assert "valxel_events" in metrics_body()[0].decode()
     assert env.client.get("/docs").status_code == 404
 
 
